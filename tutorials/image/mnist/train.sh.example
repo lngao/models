@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=-1 python convolutional.py --reg_l2_rate=0 2>&1 | tee log.txt

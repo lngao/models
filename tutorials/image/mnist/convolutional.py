@@ -234,7 +234,7 @@ def main(_):
   regularizers = (tf.nn.l2_loss(fc1_weights) + tf.nn.l2_loss(fc1_biases) +
                   tf.nn.l2_loss(fc2_weights) + tf.nn.l2_loss(fc2_biases))
   # Add the regularization term to the loss.
-  loss += 5e-4 * regularizers
+  loss += FLAGS.reg_l2_rate * regularizers
 
   # Optimizer: set up a variable that's incremented once per batch and
   # controls the learning rate decay.
@@ -309,13 +309,13 @@ def main(_):
               (step, float(step) * BATCH_SIZE / train_size,
                1000 * elapsed_time / EVAL_FREQUENCY))
         print('Minibatch loss: %.3f, learning rate: %.6f' % (l, lr))
-        print('Minibatch error: %.1f%%' % error_rate(predictions, batch_labels))
-        print('Validation error: %.1f%%' % error_rate(
+        print('Minibatch error: %.3f%%' % error_rate(predictions, batch_labels))
+        print('Validation error: %.3f%%' % error_rate(
             eval_in_batches(validation_data, sess), validation_labels))
         sys.stdout.flush()
     # Finally print the result!
     test_error = error_rate(eval_in_batches(test_data, sess), test_labels)
-    print('Test error: %.1f%%' % test_error)
+    print('Test error: %.3f%%' % test_error)
     if FLAGS.self_test:
       print('test_error', test_error)
       assert test_error == 0.0, 'expected 0.0 test_error, got %.2f' % (
@@ -334,6 +334,11 @@ if __name__ == '__main__':
       default=False,
       action='store_true',
       help='True if running a self test.')
+  parser.add_argument(
+      '--reg_l2_rate',
+      default=5e-4,
+      type=float,
+      help='the fully connected layer l2 rate.')
 
   FLAGS, unparsed = parser.parse_known_args()
   tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)
