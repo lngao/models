@@ -114,7 +114,8 @@ class digitRecog:
         self.__input_data = tf.placeholder(data_type(),shape=(1, IMAGE_SIZE, IMAGE_SIZE, NUM_CHANNELS))
         self.__model = model(self.__input_data)
 
-        self.__sess = tf.Session()
+        sess_config = tf.ConfigProto(device_count={'GPU': 0})
+        self.__sess = tf.Session(config=sess_config)
         with self.__sess.as_default():
             saver = tf.train.Saver()
             saver.restore(self.__sess, ckpt_name)
@@ -124,6 +125,7 @@ class digitRecog:
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         if not (img.shape[0] == IMAGE_SIZE and img.shape[1] == IMAGE_SIZE):
             img = get_square_image(img, IMAGE_SIZE)
+        img = img/255.0
         img = np.reshape(img, [1, IMAGE_SIZE, IMAGE_SIZE, NUM_CHANNELS])
         return img
 
