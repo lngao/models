@@ -117,6 +117,12 @@ def error_rate(predictions, labels):
       numpy.sum(numpy.argmax(predictions, 1) == labels) /
       predictions.shape[0])
 
+def save_model(sess):
+    """
+    :return:
+    """
+    saver = tf.train.Saver()
+    saver.save(sess, "./model.ckpt")
 
 def main(_):
   if FLAGS.self_test:
@@ -320,6 +326,9 @@ def main(_):
       print('test_error', test_error)
       assert test_error == 0.0, 'expected 0.0 test_error, got %.2f' % (
           test_error,)
+
+    # save model
+    save_model(sess)
 
 
 if __name__ == '__main__':
