@@ -141,6 +141,9 @@ class digitRecog:
 
     def __process_peiyou(self, img):
         ret, img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        mean_value = np.mean(img)
+        if mean_value > 128:
+            img = 255 - img
         img_copy = img.copy()
         save_debug_img(_DEBUG_, "binary.png", img)
         _, contours, hierarchy = cv2.findContours(img, cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
@@ -174,11 +177,11 @@ class digitRecog:
 
     def recog_from_file(self, img_path):
         img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-        if img is None:
-            return ""
         return self.recog(img)
 
     def recog(self, img):
+        if img is None:
+            return ""
         img = self.__preprocess(img)
         predict = self.__sess.run(self.__model, feed_dict={self.__input_data: img})
         return predict[0]
@@ -245,12 +248,11 @@ if __name__ == '__main__':
     # img_path = "../../../official/mnist/example3.png"
     # recog_img(img_path)
     img_file_path = "../../../official/mnist/"
-    img_file_path = "./error/"
     img_file_path_base = "/home/gaolining/host_share/digit/test_data/"
 
     result_file = "digit_recog_result.txt"
     f = open(result_file, "w")
-    #recog_img_files(instance, img_file_path, f)
+    recog_img_files(instance, img_file_path, f, None)
     f.close()
 
     recog_img_files_bath(img_file_path_base)
