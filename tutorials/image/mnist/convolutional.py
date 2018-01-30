@@ -123,6 +123,13 @@ def save_model(sess):
     """
     saver = tf.train.Saver()
     saver.save(sess, "./model.ckpt")
+    tf.train.write_graph(sess.graph_def, "/home/extend/code/models/tutorials/image/mnist/", "graph.pb",as_text=False)
+
+def save_model_pb(sess):
+    builder = tf.saved_model.builder.SavedModelBuilder("./savedmodel")
+    builder.add_meta_graph_and_variables(sess,[tf.saved_model.tag_constants.TRAINING])
+    builder.add_meta_graph([tf.saved_model.tag_constants.SERVING])
+    builder.save()
 
 def main(_):
   if FLAGS.self_test:
