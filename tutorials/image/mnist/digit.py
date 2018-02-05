@@ -22,7 +22,7 @@ def save_debug_img(is_debug, img_path, img):
     :return:
     """
     if is_debug:
-        cv2.imwrite(img_path, img)
+        cv2.imwrite("./tmp/" + img_path, img)
 
 def get_square_image(input_image, dst_size):
     """
@@ -57,6 +57,29 @@ def merge_boundingbox(box_1, box_2):
     y_new_1 = max(y_1 + h_1, y_2 + h_2)
 
     return x_new, y_new, x_new_1 - x_new, y_new_1 - y_new
+
+def overlap(box_1, box_2):
+    h_thld_l = 0.8
+    h_thld_s = 0.4
+    v_thld = 0.4
+
+    x_1, y_1, w_1, h_1 = box_1
+    x_2, y_2, w_2, h_2 = box_2
+
+    if (x_1 > x_2) and ((x_1 + w_1) < (x_2 + w_2)):
+        return True
+
+    if (x_2 > x_1) and ((x_1 + w_1) > (x_2 + w_2)):
+        return True
+
+    dis_x = abs((x_1 + w_1/2.0) - (x_2 + w_2/2.0))
+    horizental_overlap = max(0, 1 - dis_x/(w_1/2.0 + w_2/2.0))
+
+    dis_y = abs((y_1 + h_1 / 2.0) - (y_2 + h_2 / 2.0))
+    vertical_overlap = max(0, 1 - dis_y / (w_1 / 2.0 + w_2 / 2.0))
+
+    # if horizental overlap is very large or (horizental is large and vertial overlap is small)
+    return horizental_overlap > h_thld_l or (horizental_overlap > h_thld_s and vertical_overlap < v_thld)
 
 class digitRecog:
     """
@@ -100,7 +123,7 @@ class digitRecog:
         :return:
         """
         ret, img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        mean_value = np.mean(img)
+        mean_value = np.mean(img)#cv::mean
         if mean_value > 128:
             img = 255 - img
         img_copy = img.copy()
@@ -118,26 +141,138 @@ class digitRecog:
         save_debug_img(_DEBUG_, "roi.png", roi)
         return roi
 
+    def __get_roi_img(self, contour_list, flag_list, img):
+
+        roi_list = []
+        for i, contour in enumerate(contour_list):
+            if not flag_list[i]:
+                continue
+            (x, y, w, h) = contour[0]
+
+            # check the box validation
+            h_ratio = float(h) / img.shape[0]
+            if h_ratio < 0.3 :
+                print "invalid h_{}".format(h_ratio)
+                continue
+
+            # get the roi image by box and contour mask
+            bouding_img = img.copy()
+            bouding_mask = img.copy()
+            bouding_mask[:] = 0
+            cv2.drawContours(bouding_mask, [contour[1]], 0, (255, 255, 255), -1)
+            bouding_img = cv2.bitwise_and(bouding_img, bouding_mask)
+
+            # if the width/height ratio is too large ,may be two number linked, so segement to two by center
+            ratio = float(w) / h
+            if ratio > 1.2:
+                print ratio
+                roi = bouding_img[y:y + h, x:x + w/2]
+                border = int(float(roi.shape[0]) * 0.2)
+                roi = cv2.copyMakeBorder(roi, border, border, 0, 0, cv2.BORDER_CONSTANT, None, [0, 0, 0])
+                roi = 255 - roi
+                save_debug_img(_DEBUG_, "roi_0_{}.png".format(i), roi)
+                roi_list.append(roi)
+
+                roi = bouding_img[y:y + h, x + w/2:x + w]
+                border = int(float(roi.shape[0]) * 0.2)
+                roi = cv2.copyMakeBorder(roi, border, border, 0, 0, cv2.BORDER_CONSTANT, None, [0, 0, 0])
+                roi = 255 - roi
+                save_debug_img(_DEBUG_, "roi_1_{}.png".format(i), roi)
+                roi_list.append(roi)
+
+            else:
+                roi = bouding_img[y:y + h, x:x + w]
+                border = int(float(roi.shape[0]) * 0.2)
+                roi = cv2.copyMakeBorder(roi, border, border, 0, 0, cv2.BORDER_CONSTANT, None, [0, 0, 0])
+                roi = 255 - roi
+                save_debug_img(_DEBUG_, "roi_{}.png".format(i), roi)
+                roi_list.append(roi)
+        return roi_list
+
+    def __segment(self, img):
+        """
+
+        :param img:
+        :return:
+        """
+        # binary image
+        # thld_list = [0,10,20,50,100,200,220]
+        # for thld in thld_list:
+        #     ret, tmp = cv2.threshold(img.copy(), thld, 255, cv2.THRESH_BINARY)
+        #     save_debug_img(_DEBUG_, "binary_{}.png".format(thld), tmp)
+        ret, img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)#
+
+        # make sure the backgroud is black, if not reverse the image
+        mean_value = np.mean(img)  # cv::mean
+        if mean_value > 128:
+            img = 255 - img
+        save_debug_img(_DEBUG_, "binary.png", img)
+
+        # find contours
+        # method_list = [cv2.CHAIN_APPROX_SIMPLE, cv2.CHAIN_APPROX_NONE, cv2.CHAIN_APPROX_TC89_KCOS, cv2.CHAIN_APPROX_TC89_L1]
+        # for i,method in enumerate(method_list):
+        #     _, contours, hierarchy = cv2.findContours(img, cv2.RETR_EXTERNAL, method)
+        #     bouding_img = img.copy()
+        #     for cnt in contours:
+        #         (x, y, w, h) = cv2.boundingRect(cnt)
+        #         bouding_img = cv2.rectangle(bouding_img, (x, y), (x + w, y + h), [255, 255, 255])
+        #     save_debug_img(_DEBUG_, "bouding_{}.png".format(i), bouding_img)
+        _, contours, hierarchy = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contour_list=[]
+        for cnt in contours:
+            (x, y, w, h) = cv2.boundingRect(cnt)
+            contour_list.append([(x, y, w, h), cnt])
+
+        if _DEBUG_:
+            bouding_img = img.copy()
+            bouding_img[:] = 0
+            for contour in contour_list:
+                (x, y, w, h) = contour[0]
+                cnt = contour[1]
+                bouding_img = cv2.rectangle(bouding_img, (x, y), (x + w, y + h), [255, 255, 255])
+                cv2.drawContours(bouding_img, [cnt], 0, (255, 255, 255), -1)
+            save_debug_img(_DEBUG_, "bouding.png", bouding_img)
+
+        # sort box by x
+        contour_list.sort(key=lambda x:x[0][0])
+
+        # merge overlap box
+        flag_list = []
+        for i in range(len(contour_list)):
+            flag_list.append(True)
+        for i in range(len(contour_list)-1):
+            if not flag_list[i]:
+                continue
+            for j in range(i+1, len(contour_list)):
+                if not flag_list[j]:
+                    continue
+                if overlap(contour_list[i][0], contour_list[j][0]):
+                    merge_box = merge_boundingbox(contour_list[i][0], contour_list[j][0])
+                    contour_list[i][0] = merge_box
+                    flag_list[j]=False
+        # get roi img list
+        roi_img_list = self.__get_roi_img(contour_list, flag_list, img)
+        return  roi_img_list
+
     def __preprocess(self, img):
         """
 
         :param img:
         :return:
         """
-        img = self.__process_peiyou(img)
         if len(img.shape) == 3 and img.shape[2] == 3:
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        if not (img.shape[0] == IMAGE_SIZE and img.shape[1] == IMAGE_SIZE):
-            img = get_square_image(img, IMAGE_SIZE)
-            save_debug_img(_DEBUG_, "square.png",img)
-            #kernel = np.ones((3, 3), np.uint8)
-            #img = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel, iterations=1)
-            #img = cv2.erode(img, kernel, iterations=1)
-            #save_debug_img(_DEBUG_, "binary_morpho.png", img)
-        image = np.zeros([IMAGE_SIZE, IMAGE_SIZE], dtype=np.float32)
-        image[:] = (128.0 - img[:])/255.0
-        image = np.reshape(image, [1, IMAGE_SIZE, IMAGE_SIZE, NUM_CHANNELS])
-        return image
+        img_list = self.__segment(img)
+        image_list = []
+        for i,img in enumerate(img_list):
+            if not (img.shape[0] == IMAGE_SIZE and img.shape[1] == IMAGE_SIZE):
+                img = get_square_image(img, IMAGE_SIZE)
+                save_debug_img(_DEBUG_, "square_{}.png".format(i),img)
+            image = np.zeros([IMAGE_SIZE, IMAGE_SIZE], dtype=np.float32)
+            image[:] = (128.0 - img[:])/255.0#cv::convert
+            image = np.reshape(image, [1, IMAGE_SIZE, IMAGE_SIZE, NUM_CHANNELS])
+            image_list.append(image)
+        return image_list
 
     def recog_from_file(self, img_path):
         """
@@ -149,6 +284,11 @@ class digitRecog:
             print "model not inited"
             return None
         img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+
+        if _DEBUG_:
+            if os.path.exists("./tmp"):
+                shutil.rmtree("./tmp")
+            os.mkdir("./tmp")
         return self.recog(img)
 
     def recog(self, img):
@@ -159,13 +299,21 @@ class digitRecog:
         """
         if img is None:
             return ""
-        img = self.__preprocess(img)
-        predict = self.__sess.run(self.__model, feed_dict={self.__input_data: img})
-        predict = predict[0]
-        recog_res = np.argmax(predict)
-        sort = np.argsort(-predict)
-        confidence = predict[recog_res]
-        robust = predict[sort[0]] - predict[sort[1]]
+        img_list = self.__preprocess(img)
+        if len(img_list) < 1:
+            return "0", 0, 0
+        recog_res = ""
+        confidence = 0.0
+        robust = 0.0
+        for img in img_list:
+            predict = self.__sess.run(self.__model, feed_dict={self.__input_data: img})
+            predict = predict[0]
+            recog_res += str(np.argmax(predict))
+            sort = np.argsort(-predict)
+            confidence += predict[sort[0]]
+            robust += predict.tolist()[sort[0]] - predict[sort[1]]
+        confidence/=len(img_list)
+        robust/=len(img_list)
         return recog_res,confidence,robust
 
 # functions show how to use digitRecog
@@ -208,8 +356,8 @@ def recog_img_files(instance, img_path, f, label=None, ext="*.png"):
     for img_file in img_file_list:
         recog_res = recog_img_file(instance, img_file, f)
         if label is not None:
-           right += (recog_res == int(label))
-           if (recog_res != int(label)):
+           right += (recog_res == label)
+           if (recog_res != label):
                shutil.copy(img_file, "./error/")
     duration_time = time.time() - start_time
     str = "avg time: {}ms".format(1000 * duration_time/len(img_file_list))
@@ -254,17 +402,17 @@ if __name__ == '__main__':
     # do recognize
     result_file = "digit_recog_result.txt"
     f = open(result_file, "w")
-    recognize_tpye = 2
+    recognize_tpye = 3
     if recognize_tpye == 0:
         # recognize single image
         img_path = "../../../official/mnist/example3.png"
         recog_img_file(instance, img_path, f)
     elif recognize_tpye ==1:
         # recognize dir images
-        img_file_path = "../../../official/mnist/"
+        img_file_path = "/home/gaolining/host_share/digit/samples_m/test/"
         recog_img_files(instance, img_file_path, f, None)
     else:
         # recognize multi dirs
-        img_file_path_base = "/home/gaolining/host_share/digit/test_data/"
+        img_file_path_base = "/home/gaolining/host_share/digit/samples_m/"
         recog_multi_img_files(img_file_path_base)
     f.close()
