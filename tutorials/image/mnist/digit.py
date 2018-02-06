@@ -144,13 +144,18 @@ class digitRecog:
     def __get_roi_img(self, contour_list, flag_list, img):
 
         roi_list = []
+        max_height = 0
+        for contour in contour_list:
+            if( contour[0][3] > max_height):
+                max_height = contour[0][3]
+
         for i, contour in enumerate(contour_list):
             if not flag_list[i]:
                 continue
             (x, y, w, h) = contour[0]
 
             # check the box validation
-            h_ratio = float(h) / img.shape[0]
+            h_ratio = float(h) / max_height
             if h_ratio < 0.3 :
                 print "invalid h_{}".format(h_ratio)
                 continue
@@ -167,14 +172,14 @@ class digitRecog:
             if ratio > 1.2:
                 print ratio
                 roi = bouding_img[y:y + h, x:x + w/2]
-                border = int(float(roi.shape[0]) * 0.2)
+                border = int(float(h) * 0.2)
                 roi = cv2.copyMakeBorder(roi, border, border, 0, 0, cv2.BORDER_CONSTANT, None, [0, 0, 0])
                 roi = 255 - roi
                 save_debug_img(_DEBUG_, "roi_0_{}.png".format(i), roi)
                 roi_list.append(roi)
 
                 roi = bouding_img[y:y + h, x + w/2:x + w]
-                border = int(float(roi.shape[0]) * 0.2)
+                border = int(float(h) * 0.2)
                 roi = cv2.copyMakeBorder(roi, border, border, 0, 0, cv2.BORDER_CONSTANT, None, [0, 0, 0])
                 roi = 255 - roi
                 save_debug_img(_DEBUG_, "roi_1_{}.png".format(i), roi)
@@ -182,7 +187,8 @@ class digitRecog:
 
             else:
                 roi = bouding_img[y:y + h, x:x + w]
-                border = int(float(roi.shape[0]) * 0.2)
+                #border = int(float(roi.shape[0]) * 0.2)
+                border = int(float(h) * 0.2)
                 roi = cv2.copyMakeBorder(roi, border, border, 0, 0, cv2.BORDER_CONSTANT, None, [0, 0, 0])
                 roi = 255 - roi
                 save_debug_img(_DEBUG_, "roi_{}.png".format(i), roi)
@@ -217,9 +223,13 @@ class digitRecog:
         #         (x, y, w, h) = cv2.boundingRect(cnt)
         #         bouding_img = cv2.rectangle(bouding_img, (x, y), (x + w, y + h), [255, 255, 255])
         #     save_debug_img(_DEBUG_, "bouding_{}.png".format(i), bouding_img)
-        _, contours, hierarchy = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        _, contonurs, hierarchy = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        if(len(contonurs) < 1):
+            return None
+
         contour_list=[]
-        for cnt in contours:
+        for cnt in contonurs:
             (x, y, w, h) = cv2.boundingRect(cnt)
             contour_list.append([(x, y, w, h), cnt])
 
@@ -263,6 +273,9 @@ class digitRecog:
         if len(img.shape) == 3 and img.shape[2] == 3:
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         img_list = self.__segment(img)
+        if not img_list:
+            return []
+
         image_list = []
         for i,img in enumerate(img_list):
             if not (img.shape[0] == IMAGE_SIZE and img.shape[1] == IMAGE_SIZE):
@@ -402,7 +415,7 @@ if __name__ == '__main__':
     # do recognize
     result_file = "digit_recog_result.txt"
     f = open(result_file, "w")
-    recognize_tpye = 3
+    recognize_tpye = 1
     if recognize_tpye == 0:
         # recognize single image
         img_path = "../../../official/mnist/example3.png"
