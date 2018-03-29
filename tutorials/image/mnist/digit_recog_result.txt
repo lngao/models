@@ -1,0 +1,4 @@
+00A1D174-B1AC-4F00-9BB6-3002185FD5F8.png recog result is 5, confidence is 1.000, robust is 1.000, exe time: 173.75087738ms
+D1956F0F-BFB3-47F2-ABA8-EAE3BCC40D58.png recog result is 02, confidence is 0.921, robust is 0.870, exe time: 19.8490619659ms
+test.png recog result is 17, confidence is 0.396, robust is 0.193, exe time: 44.4078445435ms
+avg time: 79.4456799825ms
